@@ -1,5 +1,7 @@
+import os
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from flask import Flask, request
 
 # Bot tokeningiz
 TOKEN = "8866545271:AAGcXV2z4di-InBp53ZT13vO839mgN79rGM"
@@ -7,13 +9,26 @@ TOKEN = "8866545271:AAGcXV2z4di-InBp53ZT13vO839mgN79rGM"
 # Asosiy admin ID raqami
 OWNER_ID = 8372285180
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, threaded=False)
+app = Flask(__name__)
 
-# Xotirada ma'lumotlarni saqlash uchun vaqtinchalik bazalar
+# Xotirada ma'lumotlarni saqlash uchun
 CONFIG = {
     "target_group": None
 }
 user_data = {}
+
+@app.route('/')
+def home():
+    return "Bot is running with Flask and Webhooks!"
+
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    json_string = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_string)
+    bot.process_new_updates([update])
+    return "!", 200
+
 
 # --- ADMIN PANEL ---
 @bot.message_handler(commands=['admin'])
@@ -184,6 +199,13 @@ def process_details(message):
         bot.send_message(message.chat.id, f"❌ Xatolik yuz berdi: Guruhga xabar yuborib bo'lmadi.")
         print(f"Xato: {e}")
 
-# Botni doimiy ishda ushlab turish
-print("Bot ishga tushdi...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    # Render avtomat tarzda beradigan tashqi URL manzilini olamiz
+    RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+    if RENDER_EXTERNAL_URL:
+        bot.remove_webhook()
+        bot.set_webhook(url=f"{RENDER_EXTERNAL_URL}/{TOKEN}")
+        print(f"Webhook o'rnatildi: {RENDER_EXTERNAL_URL}/{TOKEN}")
+    
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
