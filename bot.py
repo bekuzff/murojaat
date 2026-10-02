@@ -1,180 +1,162 @@
-import asyncio
-import logging
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import (
-    Message, CallbackQuery, InlineKeyboardMarkup, 
-    InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-)
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 
-# Sizning bot tokeningiz
+# Bot tokeningiz
 TOKEN = "8866545271:AAGcXV2z4di-InBp53ZT13vO839mgN79rGM"
 
 # Asosiy admin ID raqami
 OWNER_ID = 8372285180
 
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
+bot = telebot.TeleBot(TOKEN)
 
-# Xotirada guruh usernamesini saqlash uchun
+# Xotirada ma'lumotlarni saqlash uchun vaqtinchalik bazalar
 CONFIG = {
-    "target_group": None 
+    "target_group": None
 }
-
-# Bot qadamlari (FSM holatlari)
-class MurojaatForm(StatesGroup):
-    turi = State()
-    mfy = State()
-    phone = State()
-    details = State()
-
-class AdminStates(StatesGroup):
-    waiting_for_group = State()
+user_data = {}
 
 # --- ADMIN PANEL ---
-@dp.message(Command("admin"))
-async def admin_panel(message: Message):
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
     if message.from_user.id != OWNER_ID:
-        await message.answer("❌ Kechirasiz, bu buyruq faqat asosiy admin uchun!")
+        bot.send_message(message.chat.id, "❌ Kechirasiz, bu buyruq faqat asosiy admin uchun!")
         return
     
     current_group = CONFIG.get("target_group", "Hali ulanmagan ❌")
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📢 Maxfiy guruh usernamesini ulash", callback_data="set_group")],
-        [InlineKeyboardButton(text="📊 Holatni tekshirish", callback_data="check_status")]
-    ])
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("📢 Maxfiy guruh usernamesini ulash", callback_data="set_group"))
+    markup.add(InlineKeyboardButton("📊 Holatni tekshirish", callback_data="check_status"))
     
-    await message.answer(
+    bot.send_message(
+        message.chat.id,
         f"👑 **Admin Panel**\n\n"
         f"Joriy maxfiy guruh: `{current_group}`\n\n"
         f"Kerakli amalni tanlang:",
-        reply_markup=keyboard,
+        reply_markup=markup,
         parse_mode="Markdown"
     )
 
-@dp.callback_query(F.data == "set_group")
-async def ask_group(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != OWNER_ID:
+@bot.callback_query_handler(func=lambda call: call.data == "set_group")
+def ask_group(call):
+    if call.from_user.id != OWNER_ID:
         return
-    await callback.message.answer(
+    msg = bot.send_message(
+        call.message.chat.id,
         "Iltimos, maxfiy guruhning **usernameni** yuboring (masalan: `@maxfiy_guruh_uz`):\n\n"
-        "*(Eslatma: Bot o'sha guruhda bo'lishi va xabar yoza oladigan admin bo'lishi shart!)*"
+        "*(Eslatma: Bot o'sha guruhda bo'lishi va xabar yoza oladigan admin bo'lishi shart!)*",
+        parse_mode="Markdown"
     )
-    await state.set_state(AdminStates.waiting_for_group)
-    await callback.answer()
+    bot.register_next_step_handler(msg, save_group)
 
-@dp.message(AdminStates.waiting_for_group)
-async def save_group(message: Message, state: FSMContext):
+def save_group(message):
     if message.from_user.id != OWNER_ID:
         return
-    
     group_input = message.text.strip()
     CONFIG["target_group"] = group_input
-    
-    await message.answer(f"✅ Muvaffaqiyatli saqlandi!\n\nEndi barcha murojaatlar **{group_input}** ga yuboriladi.")
-    await state.clear()
+    bot.send_message(message.chat.id, f"✅ Muvaffaqiyatli saqlandi!\n\nEndi barcha murojaatlar **{group_input}** ga yuboriladi.")
 
-@dp.callback_query(F.data == "check_status")
-async def check_status(callback: CallbackQuery):
-    if callback.from_user.id != OWNER_ID:
+@bot.callback_query_handler(func=lambda call: call.data == "check_status")
+def check_status(call):
+    if call.from_user.id != OWNER_ID:
         return
     group = CONFIG.get("target_group", "Ulanmagan")
-    await callback.answer(f"Hozirgi guruh: {group}", show_alert=True)
+    bot.answer_callback_query(call.id, f"Hozirgi guruh: {group}", show_alert=True)
 
 
-# --- FOYDALANUVCHI QISMI (Bot ichidagi tugmalar va qadamlar) ---
+# --- FOYDALANUVCHI QISMI ---
 
-@dp.message(Command("start"))
-async def start_command(message: Message, state: FSMContext):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔹 So'rovnoma", callback_data="turi_Sorovnoma")],
-        [InlineKeyboardButton(text="🔹 Vasiylik / homiylik", callback_data="turi_Vasiylik")]
-    ])
-    await message.answer(
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    user_data[message.from_user.id] = {}
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("🔹 So'rovnoma", callback_data="turi_Sorovnoma"))
+    markup.add(InlineKeyboardButton("🔹 Vasiylik / homiylik", callback_data="turi_Vasiylik"))
+    
+    bot.send_message(
+        message.chat.id,
         "🔒 **Sizning shaxsingiz sir saqlanishini kafolatlaymiz**\n\n"
         "Murojaat turini tanlang:",
-        reply_markup=keyboard,
+        reply_markup=markup,
         parse_mode="Markdown"
     )
-    await state.set_state(MurojaatForm.turi)
 
-@dp.callback_query(MurojaatForm.turi, F.data.startswith("turi_"))
-async def process_turi(callback: CallbackQuery, state: FSMContext):
-    turi = callback.data.replace("turi_", "")
+@bot.callback_query_handler(func=lambda call: call.data.startswith("turi_"))
+def process_turi(call):
+    turi = call.data.replace("turi_", "")
     if turi == "Sorovnoma":
         turi = "So'rovnoma"
     elif turi == "Vasiylik":
         turi = "Vasiylik / homiylik"
         
-    await state.update_data(murojaat_turi=turi)
+    user_data[call.from_user.id]["murojaat_turi"] = turi
     
-    # MFY tanlash tugmalari
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Bobur MFY", callback_data="mfy_Bobur MFY")],
-        [InlineKeyboardButton(text="Yoshlik MFY", callback_data="mfy_Yoshlik MFY")],
-        [InlineKeyboardButton(text="Gulzor MFY", callback_data="mfy_Gulzor MFY")],
-        [InlineKeyboardButton(text="Istiqlol MFY", callback_data="mfy_Istiqlol MFY")]
-    ])
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Bobur MFY", callback_data="mfy_Bobur MFY"))
+    markup.add(InlineKeyboardButton("Yoshlik MFY", callback_data="mfy_Yoshlik MFY"))
+    markup.add(InlineKeyboardButton("Gulzor MFY", callback_data="mfy_Gulzor MFY"))
+    markup.add(InlineKeyboardButton("Istiqlol MFY", callback_data="mfy_Istiqlol MFY"))
     
-    await callback.message.edit_text(
+    bot.edit_message_text(
         f"📌 **Murojaat turi:** {turi}\n\n📍 **MFYni (hududni) tanlang:**",
-        reply_markup=keyboard,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=markup,
         parse_mode="Markdown"
     )
-    await state.set_state(MurojaatForm.mfy)
-    await callback.answer()
 
-@dp.callback_query(MurojaatForm.mfy)
-async def process_mfy(callback: CallbackQuery, state: FSMContext):
-    mfy = callback.data.replace("mfy_", "")
-    await state.update_data(mfy=mfy)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("mfy_"))
+def process_mfy(call):
+    mfy = call.data.replace("mfy_", "")
+    user_data[call.from_user.id]["mfy"] = mfy
     
-    # Telefon raqamni so'rash uchun pastki tugma
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="📞 Telefon raqamni yuborish", request_contact=True)]
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=True
-    )
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(KeyboardButton("📞 Telefon raqamni yuborish", request_contact=True))
     
-    await callback.message.answer(
+    bot.send_message(
+        call.message.chat.id,
         f"📍 **Tanlangan MFY:** {mfy}\n\n"
         f"📲 Bog'lanishimiz uchun pastdagi **'Telefon raqamni yuborish'** tugmasini bosing:",
-        reply_markup=keyboard
+        reply_markup=markup,
+        parse_mode="Markdown"
     )
-    await state.set_state(MurojaatForm.phone)
-    await callback.answer()
+    bot.register_next_step_handler(call.message, process_phone)
 
-@dp.message(MurojaatForm.phone, F.contact)
-async def process_phone(message: Message, state: FSMContext):
+def process_phone(message):
+    if not message.contact:
+        bot.send_message(message.chat.id, "Iltimos, pastdagi tugmani bosib telefon raqamingizni yuboring.")
+        bot.register_next_step_handler(message, process_phone)
+        return
+        
     phone_number = message.contact.phone_number
-    await state.update_data(phone=phone_number)
+    user_data[message.from_user.id]["phone"] = phone_number
     
-    # Raqam olingach klaviaturani olib tashlaymiz
-    await message.answer("✅ Raqam qabul qilindi.", reply_markup=ReplyKeyboardRemove())
-    await message.answer(
-        "📝 Endi voqea yoki murojaat tafsilotlarini batafsil matn ko'rinishida yuboring:"
+    bot.send_message(
+        message.chat.id,
+        "✅ Raqam qabul qilindi.\n\n📝 Endi voqea yoki murojaat tafsilotlarini batafsil matn ko'rinishida yuboring:",
+        reply_markup=ReplyKeyboardRemove()
     )
-    await state.set_state(MurojaatForm.details)
+    bot.register_next_step_handler(message, process_details)
 
-@dp.message(MurojaatForm.details)
-async def process_details(message: Message, state: FSMContext):
+def process_details(message):
     details = message.text
-    data = await state.get_data()
+    user_id = message.from_user.id
     
-    murojaat_turi = data.get("murojaat_turi")
-    mfy = data.get("mfy")
-    phone = data.get("phone")
+    if user_id not in user_data:
+        user_data[user_id] = {}
+        
+    user_data[user_id]["details"] = details
+    data = user_data[user_id]
+    
+    murojaat_turi = data.get("murojaat_turi", "Noma'lum")
+    mfy = data.get("mfy", "Noma'lum")
+    phone = data.get("phone", "Noma'lum")
     
     user = message.from_user
     user_link = f"<a href='tg://user?id={user.id}'>{user.full_name}</a>"
     username = f"@{user.username}" if user.username else "Mavjud emas"
 
-    # Guruhga yuboriladigan xabar shakli
     report_text = (
         f"🚨 **Yangi Murojaat Keldi!**\n\n"
         f"📌 **Murojaat yo'nalishi:** {murojaat_turi}\n"
@@ -188,28 +170,20 @@ async def process_details(message: Message, state: FSMContext):
     target_group = CONFIG.get("target_group")
     
     if not target_group:
-        await message.answer("⚠️ Hali admin tomonidan maxfiy guruh ulanmagani uchun murojaat vaqtincha yuborilmadi.")
-        await state.clear()
+        bot.send_message(message.chat.id, "⚠️ Hali admin tomonidan maxfiy guruh ulanmagani uchun murojaat vaqtincha yuborilmadi.")
         return
 
     try:
-        # Maxfiy guruhga yuborish
-        await bot.send_message(
+        bot.send_message(
             chat_id=target_group,
             text=report_text,
             parse_mode="HTML"
         )
-        await message.answer("✅ Murojaatingiz muvaffaqiyatli qabul qilindi va mas'ul guruhga yuborildi!")
+        bot.send_message(message.chat.id, "✅ Murojaatingiz muvaffaqiyatli qabul qilindi va mas'ul guruhga yuborildi!")
     except Exception as e:
-        await message.answer(f"❌ Xatolik yuz berdi: Guruhga xabar yuborib bo'lmadi. (Admin kiritgan guruh usernamesini to'g'riligini va bot o'sha guruhda adminligini tekshiring).")
+        bot.send_message(message.chat.id, f"❌ Xatolik yuz berdi: Guruhga xabar yuborib bo'lmadi.")
         print(f"Xato: {e}")
-        
-    await state.clear()
 
-async def main():
-    logging.basicConfig(level=logging.INFO)
-    print("Bot ishga tushdi...")
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+# Botni doimiy ishda ushlab turish
+print("Bot ishga tushdi...")
+bot.infinity_polling()
