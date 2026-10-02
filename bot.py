@@ -79,7 +79,7 @@ def check_status(call):
     bot.answer_callback_query(call.id, f"Hozirgi guruh: {group}", show_alert=True)
 
 
-# --- FOYDALANUVCHI QISMI ---
+# --- FOYDALANUVCHI QISMI (Bosqichma-bosqich manzil va murojaat) ---
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
@@ -107,6 +107,46 @@ def process_turi(call):
         
     user_data[call.from_user.id]["murojaat_turi"] = turi
     
+    # 1. Viloyatni tanlash
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Toshkent shahri", callback_data="vil_Toshkent shahri"))
+    markup.add(InlineKeyboardButton("Toshkent viloyati", callback_data="vil_Toshkent viloyati"))
+    markup.add(InlineKeyboardButton("Farg'ona viloyati", callback_data="vil_Farg'ona viloyati"))
+    markup.add(InlineKeyboardButton("Samarqand viloyati", callback_data="vil_Samarqand viloyati"))
+    
+    bot.edit_message_text(
+        f"📌 **Murojaat turi:** {turi}\n\n🌍 **Viloyatni tanlang:**",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("vil_"))
+def process_viloyat(call):
+    viloyat = call.data.replace("vil_", "")
+    user_data[call.from_user.id]["viloyat"] = viloyat
+    
+    # 2. Tumanni tanlash
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Tuman / Shahar 1", callback_data="tum_Tuman 1"))
+    markup.add(InlineKeyboardButton("Tuman / Shahar 2", callback_data="tum_Tuman 2"))
+    markup.add(InlineKeyboardButton("Tuman / Shahar 3", callback_data="tum_Tuman 3"))
+    
+    bot.edit_message_text(
+        f"🌍 **Viloyat:** {viloyat}\n\n🏙 **Tumanni (shaharni) tanlang:**",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("tum_"))
+def process_tuman(call):
+    tuman = call.data.replace("tum_", "")
+    user_data[call.from_user.id]["tuman"] = tuman
+    
+    # 3. MFYni tanlash
     markup = InlineKeyboardMarkup()
     markup.add(InlineKeyboardButton("Bobur MFY", callback_data="mfy_Bobur MFY"))
     markup.add(InlineKeyboardButton("Yoshlik MFY", callback_data="mfy_Yoshlik MFY"))
@@ -114,7 +154,7 @@ def process_turi(call):
     markup.add(InlineKeyboardButton("Istiqlol MFY", callback_data="mfy_Istiqlol MFY"))
     
     bot.edit_message_text(
-        f"📌 **Murojaat turi:** {turi}\n\n📍 **MFYni (hududni) tanlang:**",
+        f"🏙 **Tuman:** {tuman}\n\n📍 **MFYni tanlang:**",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         reply_markup=markup,
@@ -126,12 +166,13 @@ def process_mfy(call):
     mfy = call.data.replace("mfy_", "")
     user_data[call.from_user.id]["mfy"] = mfy
     
+    # 4. Telefon raqamni so'rash (uy raqami tashlab yuborildi)
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("📞 Telefon raqamni yuborish", request_contact=True))
     
     bot.send_message(
         call.message.chat.id,
-        f"📍 **Tanlangan MFY:** {mfy}\n\n"
+        f"📍 **MFY:** {mfy}\n\n"
         f"📲 Bog'lanishimiz uchun pastdagi **'Telefon raqamni yuborish'** tugmasini bosing:",
         reply_markup=markup,
         parse_mode="Markdown"
@@ -165,6 +206,8 @@ def process_details(message):
     data = user_data[user_id]
     
     murojaat_turi = data.get("murojaat_turi", "Noma'lum")
+    viloyat = data.get("viloyat", "Noma'lum")
+    tuman = data.get("tuman", "Noma'lum")
     mfy = data.get("mfy", "Noma'lum")
     phone = data.get("phone", "Noma'lum")
     
@@ -175,9 +218,11 @@ def process_details(message):
     report_text = (
         f"🚨 **Yangi Murojaat Keldi!**\n\n"
         f"📌 **Murojaat yo'nalishi:** {murojaat_turi}\n"
-        f"📍 **Hudud (MFY):** {mfy}\n"
+        f"🌍 **Viloyat:** {viloyat}\n"
+        f"🏙 **Tuman / Shahar:** {tuman}\n"
+        f"📍 **MFY:** {mfy}\n"
         f"📞 **Telefon raqami:** +{phone}\n"
-        f"📝 **Murojaat matni / Voqea tafsiloti:** \n{details}\n\n"
+        f"📝 **Murojaat tafsiloti:** \n{details}\n\n"
         f"👤 **Foydalanuvchi:** {user_link}\n"
         f"🔗 **Username:** {username}"
     )
@@ -200,7 +245,6 @@ def process_details(message):
         print(f"Xato: {e}")
 
 if __name__ == "__main__":
-    # Render avtomat tarzda beradigan tashqi URL manzilini olamiz
     RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
     if RENDER_EXTERNAL_URL:
         bot.remove_webhook()
