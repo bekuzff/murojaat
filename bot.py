@@ -79,9 +79,9 @@ def check_status(call):
     bot.answer_callback_query(call.id, f"Hozirgi guruh: {group}", show_alert=True)
 
 
-# --- FOYDALANUVCHI QISMI (Bosqichma-bosqich manzil va murojaat) ---
+# --- MUROJAAT JARAYONI (/start va /murojaat) ---
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=['start', 'murojaat'])
 def start_command(message):
     user_data[message.from_user.id] = {}
     
@@ -107,12 +107,24 @@ def process_turi(call):
         
     user_data[call.from_user.id]["murojaat_turi"] = turi
     
-    # 1. Viloyatni tanlash
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Toshkent shahri", callback_data="vil_Toshkent shahri"))
-    markup.add(InlineKeyboardButton("Toshkent viloyati", callback_data="vil_Toshkent viloyati"))
-    markup.add(InlineKeyboardButton("Farg'ona viloyati", callback_data="vil_Farg'ona viloyati"))
-    markup.add(InlineKeyboardButton("Samarqand viloyati", callback_data="vil_Samarqand viloyati"))
+    # O'zbekistonning barcha viloyatlari va respublika tugmalari
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton("Toshkent shahri", callback_data="vil_Toshkent shahri"),
+        InlineKeyboardButton("Toshkent viloyati", callback_data="vil_Toshkent viloyati"),
+        InlineKeyboardButton("Farg'ona viloyati", callback_data="vil_Farg'ona viloyati"),
+        InlineKeyboardButton("Andijon viloyati", callback_data="vil_Andijon viloyati"),
+        InlineKeyboardButton("Namangan viloyati", callback_data="vil_Namangan viloyati"),
+        InlineKeyboardButton("Samarqand viloyati", callback_data="vil_Samarqand viloyati"),
+        InlineKeyboardButton("Buxoro viloyati", callback_data="vil_Buxoro viloyati"),
+        InlineKeyboardButton("Xorazm viloyati", callback_data="vil_Xorazm viloyati"),
+        InlineKeyboardButton("Qashqadaryo viloyati", callback_data="vil_Qashqadaryo viloyati"),
+        InlineKeyboardButton("Surxondaryo viloyati", callback_data="vil_Surxondaryo viloyati"),
+        InlineKeyboardButton("Jizzax viloyati", callback_data="vil_Jizzax viloyati"),
+        InlineKeyboardButton("Sirdaryo viloyati", callback_data="vil_Sirdaryo viloyati"),
+        InlineKeyboardButton("Navoiy viloyati", callback_data="vil_Navoiy viloyati"),
+        InlineKeyboardButton("Qoraqalpog'iston Resp.", callback_data="vil_Qoraqalpog'iston Respublikasi")
+    )
     
     bot.edit_message_text(
         f"📌 **Murojaat turi:** {turi}\n\n🌍 **Viloyatni tanlang:**",
@@ -127,57 +139,41 @@ def process_viloyat(call):
     viloyat = call.data.replace("vil_", "")
     user_data[call.from_user.id]["viloyat"] = viloyat
     
-    # 2. Tumanni tanlash
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Tuman / Shahar 1", callback_data="tum_Tuman 1"))
-    markup.add(InlineKeyboardButton("Tuman / Shahar 2", callback_data="tum_Tuman 2"))
-    markup.add(InlineKeyboardButton("Tuman / Shahar 3", callback_data="tum_Tuman 3"))
-    
-    bot.edit_message_text(
-        f"🌍 **Viloyat:** {viloyat}\n\n🏙 **Tumanni (shaharni) tanlang:**",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
+    msg = bot.send_message(
+        call.message.chat.id,
+        f"🌍 **Viloyat:** {viloyat}\n\n"
+        f"🏙 **Tumaningiz (yoki shahringiz) nomini matn ko'rinishida yuboring** (masalan: *Chilonzor tumani*):",
         parse_mode="Markdown"
     )
+    bot.register_next_step_handler(msg, process_tuman)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("tum_"))
-def process_tuman(call):
-    tuman = call.data.replace("tum_", "")
-    user_data[call.from_user.id]["tuman"] = tuman
+def process_tuman(message):
+    tuman = message.text
+    user_data[message.from_user.id]["tuman"] = tuman
     
-    # 3. MFYni tanlash
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Bobur MFY", callback_data="mfy_Bobur MFY"))
-    markup.add(InlineKeyboardButton("Yoshlik MFY", callback_data="mfy_Yoshlik MFY"))
-    markup.add(InlineKeyboardButton("Gulzor MFY", callback_data="mfy_Gulzor MFY"))
-    markup.add(InlineKeyboardButton("Istiqlol MFY", callback_data="mfy_Istiqlol MFY"))
-    
-    bot.edit_message_text(
-        f"🏙 **Tuman:** {tuman}\n\n📍 **MFYni tanlang:**",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        reply_markup=markup,
+    msg = bot.send_message(
+        message.chat.id,
+        f"🏙 **Tuman:** {tuman}\n\n"
+        f"📍 **Mahallangiz (MFY) nomini matn ko'rinishida yuboring** (masalan: *Bunyodkor MFY*):",
         parse_mode="Markdown"
     )
+    bot.register_next_step_handler(msg, process_mfy)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("mfy_"))
-def process_mfy(call):
-    mfy = call.data.replace("mfy_", "")
-    user_data[call.from_user.id]["mfy"] = mfy
+def process_mfy(message):
+    mfy = message.text
+    user_data[message.from_user.id]["mfy"] = mfy
     
-    # 4. Telefon raqamni so'rash (uy raqami tashlab yuborildi)
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("📞 Telefon raqamni yuborish", request_contact=True))
     
     bot.send_message(
-        call.message.chat.id,
-        f"📍 **MFY:** {mfy}\n\n"
+        message.chat.id,
+        f"📍 **Mahalla (MFY):** {mfy}\n\n"
         f"📲 Bog'lanishimiz uchun pastdagi **'Telefon raqamni yuborish'** tugmasini bosing:",
         reply_markup=markup,
         parse_mode="Markdown"
     )
-    bot.register_next_step_handler(call.message, process_phone)
+    bot.register_next_step_handler(message, process_phone)
 
 def process_phone(message):
     if not message.contact:
@@ -220,7 +216,7 @@ def process_details(message):
         f"📌 **Murojaat yo'nalishi:** {murojaat_turi}\n"
         f"🌍 **Viloyat:** {viloyat}\n"
         f"🏙 **Tuman / Shahar:** {tuman}\n"
-        f"📍 **MFY:** {mfy}\n"
+        f"📍 **Mahalla (MFY):** {mfy}\n"
         f"📞 **Telefon raqami:** +{phone}\n"
         f"📝 **Murojaat tafsiloti:** \n{details}\n\n"
         f"👤 **Foydalanuvchi:** {user_link}\n"
